@@ -1,4 +1,5 @@
 
+import copy
 from django.forms import model_to_dict
 from rest_framework import status
 from rest_framework.views import APIView
@@ -300,7 +301,7 @@ class PersonnelDetailsAPIView(APIView):
         persons_detail = []
         for person in persons:
             persons_detail.append({
-                "school": person.school_class.school.title,
+                "school": school_title,
                 "role": role_map[person.personnel_type],
                 "class": person.school_class.class_order,
                 "name": " ".join([person.first_name,person.last_name]),
@@ -898,6 +899,10 @@ class SchoolHierarchyAPIView(APIView):
 
         your_result = []
 
+        """
+        LOOP model เยอะเกิน Call SQL หลายรอบแน่
+        """
+
         schools = Schools.objects.all()
         for school in schools:
             school_result = {
@@ -916,6 +921,10 @@ class SchoolHierarchyAPIView(APIView):
                 class_result[": ".join([role_map[0]," ".join([teacher.first_name,teacher.last_name])])] = student_result
                 school_result[" ".join(["class ",str(clazz.class_order)])] = class_result
             your_result.append(school_result)
+
+        """
+        fix performance
+        """
 
         return Response(your_result, status=status.HTTP_200_OK)
 
@@ -1104,25 +1113,65 @@ class SchoolStructureAPIView(APIView):
 
         your_result = []
 
-        lv1_list = SchoolStructure.objects.filter(parent_id=None)
-        for lv1 in lv1_list:
-            lv1_result = {
-                "title": lv1.title,
-                "sub": []
-            }
-            lv2_list = SchoolStructure.objects.filter(parent_id=lv1.pk)
-            for lv2 in lv2_list:
-                lv2_result = {
-                    "title": lv2.title,
-                    "sub": []
-                }
-                lv3_list = SchoolStructure.objects.filter(parent_id=lv2.pk)
-                for lv3 in lv3_list:
-                    lv2_result["sub"].append({
-                        "title": lv3.title,
-                    })
-                lv1_result["sub"].append(lv2_result)
-            your_result.append(lv1_result)
+        """
+        LOOP model เยอะเกิน Call SQL หลายรอบแน่
+        """
+        # lv1_list = SchoolStructure.objects.filter(parent_id=None)
+        # for lv1 in lv1_list:
+        #     lv1_result = {
+        #         "title": lv1.title,
+        #         "sub": []
+        #     }
+        #     lv2_list = SchoolStructure.objects.filter(parent_id=lv1.pk)
+        #     for lv2 in lv2_list:
+        #         lv2_result = {
+        #             "title": lv2.title,
+        #             "sub": []
+        #         }
+        #         lv3_list = SchoolStructure.objects.filter(parent_id=lv2.pk)
+        #         for lv3 in lv3_list:
+        #             lv2_result["sub"].append({
+        #                 "title": lv3.title,
+        #             })
+        #         lv1_result["sub"].append(lv2_result)
+        #     your_result.append(lv1_result)
                 
+
+        """
+        Fix Performance
+        """
+        lv1 = SchoolStructure.objects.filter(parent_id=None)
+        lv1_list = lv1.values_list("id",flat=True)
+        lv2 = SchoolStructure.objects.filter(parent_id__in=lv1_list)
+        lv2_list = lv2.values_list("id",flat=True)
+        lv3 = SchoolStructure.objects.filter(parent_id__in=lv2_list)
+
+        tmp_lv2 = []
+        for i in lv2 :
+            tmp_lv2.append({
+                "title": i.title,
+                "parent_title": i.parent.title, # Temp parent_title
+                "sub": [],
+            })
+        for i in lv3 :
+            for j in tmp_lv2:
+                if i.parent.title == j["title"]:
+                    j["sub"].append({
+                        "title":i.title,
+                    })
+        
+        tmp_lv1 = []
+        for i in lv1 :
+            tmp_lv1.append({
+                "title": i.title,
+                "sub": []
+            })
+        for i in tmp_lv2 :
+            for j in tmp_lv1:
+                if i["parent_title"] == j["title"]:
+                    copied = copy.deepcopy(i)
+                    del copied["parent_title"]
+                    j["sub"].append(copied)
+        your_result = tmp_lv1
 
         return Response(your_result, status=status.HTTP_200_OK)

@@ -34,7 +34,7 @@ def test_school_hierarchy():
 
 def test_school_structure():
     response = requests.get(url=f"{host}/school_structure/", headers=header)
-    print(f"\nstatus {response.status_code}\nresponse = {json.dumps(response.json(), indent=4, ensure_ascii=False)}\n")
+    print(f"\nstatus {response.status_code}\nresponse = {json.dumps(response.json(), indent=4, ensure_ascii=False)}\n duration = {response.headers['X-Page-Generation-Duration-ms']}")
 
 
 host2='http://localhost:8000/todo'
